@@ -1,56 +1,45 @@
-import initSqlJs, { Database } from 'sql.js';
-import * as path from 'path';
-import * as fs from 'fs';
+import pg from "pg";
+import dotenv from "dotenv";
 
-const DATA_DIR = process.env.DATABASE_PATH
-  ? path.dirname(process.env.DATABASE_PATH)
-  : path.join(process.cwd(), 'data');
+dotenv.config();
 
-const DB_PATH = process.env.DATABASE_PATH || path.join(DATA_DIR, 'envii.db');
+const DATABASE_URL = process.env.DATABASE_URL;
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is required");
 }
 
-let db: Database | null = null;
+let pool: pg.Pool | null = null;
 
-export async function initDb(): Promise<Database> {
-  if (db) return db;
+export async function initDb(): Promise<pg.Pool> {
+  if (pool) return pool;
 
-  const SQL = await initSqlJs();
+  pool = new pg.Pool({
+    connectionString: DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false,
+    },
+  });
 
-  // Load existing database if it exists
-  if (fs.existsSync(DB_PATH)) {
-    const fileBuffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(fileBuffer);
-  } else {
-    db = new SQL.Database();
+  // Test connection
+  const client = await pool.connect();
+  client.release();
+
+  return pool;
+}
+
+export function getDb(): pg.Pool {
+  if (!pool) {
+    throw new Error("Database not initialized. Call initDb() first.");
   }
-
-  return db;
+  return pool;
 }
 
-export function getDb(): Database {
-  if (!db) {
-    throw new Error('Database not initialized. Call initDb() first.');
-  }
-  return db;
-}
-
-export function saveDb(): void {
-  if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
-}
-
-export function closeDb(): void {
-  if (db) {
-    saveDb();
-    db.close();
-    db = null;
+export async function closeDb(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
   }
 }
 
-export { DB_PATH };
+export { DATABASE_URL };

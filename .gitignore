@@ -2,3 +2,5 @@ node_modules
 .env
 dist
 *.db
+test-projects
+test-e2e.mjs

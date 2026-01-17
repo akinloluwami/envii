@@ -274,6 +274,75 @@ Query params:
 - `limit` (default: 10, max: 100)
 - `offset` (default: 0)
 
+### Admin Endpoints
+
+Admin endpoints require the `ADMIN_API_KEY` environment variable to be set.
+
+#### `GET /admin/analytics`
+
+Get analytics summary.
+
+Headers:
+
+```
+Authorization: Bearer <admin_api_key>
+```
+
+Response:
+
+```json
+{
+  "summary": {
+    "totalVaults": 10,
+    "totalBackups": 25,
+    "totalEvents": 100,
+    "totalStorageBytes": 1048576,
+    "eventsToday": 5,
+    "backupsToday": 2
+  },
+  "eventCountsByType": [
+    { "event_type": "backup.created", "count": 50 },
+    { "event_type": "backup.downloaded", "count": 50 }
+  ]
+}
+```
+
+#### `GET /admin/events`
+
+List events with optional filtering.
+
+Headers:
+
+```
+Authorization: Bearer <admin_api_key>
+```
+
+Query params:
+
+- `type` - Filter by event type (backup.created, backup.downloaded, vault.created)
+- `vaultId` - Filter by vault ID
+- `limit` (default: 50, max: 100)
+- `offset` (default: 0)
+
+Response:
+
+````json
+{
+  "events": [
+    {
+      "id": 1,
+      "event_type": "backup.created",
+      "vault_id": "abc123...",
+      "backup_id": "bkp_xyz789",
+      "metadata": { "sizeBytes": 1024 },
+      "ip_address": "192.168.1.1",
+      "user_agent": "node-fetch/1.0",
+      "created_at": "2026-01-17T12:00:00Z"
+    }
+  ],
+  "total": 100
+}
+
 ## Security
 
 ### What's Protected
@@ -303,7 +372,7 @@ npm test
 # API tests
 cd envii-api
 npm test
-```
+````
 
 ### Building for Production
 
@@ -328,8 +397,25 @@ npm run build
 ### API Environment Variables
 
 ```bash
-PORT=4400           # Server port
-DATABASE_PATH=./data/envii.db  # SQLite database path
+PORT=4400                    # Server port
+DATABASE_URL=postgresql://...  # PostgreSQL connection string
+ADMIN_API_KEY=your-secret-key  # Admin API authentication key
+```
+
+### Database Setup
+
+Envii uses PostgreSQL for data storage. Set the `DATABASE_URL` environment variable in `api/.env`:
+
+```bash
+DATABASE_URL=postgresql://user:password@host:port/database
+ADMIN_API_KEY=your-admin-secret-key
+```
+
+Initialize the database schema:
+
+```bash
+cd api
+npm run db:init
 ```
 
 ## License

@@ -1,12 +1,13 @@
-import { initDb, closeDb, DB_PATH } from './client.js';
-import { initializeSchema } from './schema.js';
+import { initDb, closeDb, DATABASE_URL } from "./client.js";
+import { initializeSchema } from "./schema.js";
 
 async function main() {
-  console.log(`Initializing database at: ${DB_PATH}`);
+  console.log(`Connecting to PostgreSQL database...`);
+  console.log(`Database URL: ${DATABASE_URL?.replace(/:[^:@]+@/, ":****@")}`);
   await initDb();
-  initializeSchema();
-  closeDb();
-  console.log('Done!');
+  await initializeSchema();
+  await closeDb();
+  console.log("Done!");
 }
 
 main().catch(console.error);

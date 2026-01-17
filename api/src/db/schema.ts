@@ -1,72 +1,99 @@
-import { getDb, saveDb } from './client.js';
+import { getDb } from "./client.js";
 
-export function initializeSchema(): void {
+export async function initializeSchema(): Promise<void> {
   const db = getDb();
 
   // Create vaults table
-  db.run(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS vaults (
       id TEXT PRIMARY KEY,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      last_backup_at DATETIME
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      last_backup_at TIMESTAMP
     )
   `);
 
   // Create backups table
-  db.run(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS backups (
       id TEXT PRIMARY KEY,
       vault_id TEXT NOT NULL,
-      blob BLOB NOT NULL,
+      blob BYTEA NOT NULL,
       size_bytes INTEGER NOT NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       device_id TEXT,
       FOREIGN KEY (vault_id) REFERENCES vaults(id)
     )
   `);
 
   // Create indexes
-  db.run(`
+  await db.query(`
     CREATE INDEX IF NOT EXISTS idx_backups_vault_id ON backups(vault_id)
   `);
 
-  db.run(`
+  await db.query(`
     CREATE INDEX IF NOT EXISTS idx_backups_created_at ON backups(created_at)
   `);
 
-  saveDb();
-  console.log('✓ Database schema initialized');
+  // Create events table for analytics
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS events (
+      id SERIAL PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      vault_id TEXT,
+      backup_id TEXT,
+      metadata JSONB,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // Create indexes for events
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_events_event_type ON events(event_type)
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at)
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_events_vault_id ON events(vault_id)
+  `);
+
+  console.log("✓ Database schema initialized");
 }
 
 // Vault operations
-export function createVault(id: string): void {
+export async function createVault(id: string): Promise<void> {
   const db = getDb();
-  db.run(
-    `INSERT OR IGNORE INTO vaults (id, created_at) VALUES (?, datetime('now'))`,
-    [id]
+  await db.query(
+    `INSERT INTO vaults (id, created_at) VALUES ($1, NOW()) ON CONFLICT (id) DO NOTHING`,
+    [id],
   );
-  saveDb();
 }
 
-export function updateVaultLastBackup(id: string): void {
+export async function updateVaultLastBackup(id: string): Promise<void> {
   const db = getDb();
-  db.run(
-    `UPDATE vaults SET last_backup_at = datetime('now') WHERE id = ?`,
-    [id]
-  );
-  saveDb();
+  await db.query(`UPDATE vaults SET last_backup_at = NOW() WHERE id = $1`, [
+    id,
+  ]);
 }
 
-export function getVault(id: string): { id: string; created_at: string; last_backup_at: string | null } | undefined {
+export async function getVault(
+  id: string,
+): Promise<
+  { id: string; created_at: string; last_backup_at: string | null } | undefined
+> {
   const db = getDb();
-  const stmt = db.prepare('SELECT * FROM vaults WHERE id = ?');
-  stmt.bind([id]);
-  if (stmt.step()) {
-    const row = stmt.getAsObject() as { id: string; created_at: string; last_backup_at: string | null };
-    stmt.free();
-    return row;
+  const result = await db.query("SELECT * FROM vaults WHERE id = $1", [id]);
+  if (result.rows.length > 0) {
+    return result.rows[0] as {
+      id: string;
+      created_at: string;
+      last_backup_at: string | null;
+    };
   }
-  stmt.free();
   return undefined;
 }
 
@@ -74,67 +101,83 @@ export function getVault(id: string): { id: string; created_at: string; last_bac
 export interface BackupRecord {
   id: string;
   vault_id: string;
-  blob: Uint8Array;
+  blob: Buffer;
   size_bytes: number;
   created_at: string;
   device_id: string | null;
 }
 
-export function createBackup(
+export async function createBackup(
   id: string,
   vaultId: string,
   blob: Buffer,
-  deviceId?: string
-): BackupRecord {
+  deviceId?: string,
+): Promise<BackupRecord> {
   const db = getDb();
 
   // Ensure vault exists
-  createVault(vaultId);
+  await createVault(vaultId);
 
   // Insert backup
-  db.run(
+  await db.query(
     `INSERT INTO backups (id, vault_id, blob, size_bytes, device_id, created_at)
-     VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-    [id, vaultId, blob, blob.length, deviceId || null]
+     VALUES ($1, $2, $3, $4, $5, NOW())`,
+    [id, vaultId, blob, blob.length, deviceId || null],
   );
 
   // Update vault last_backup_at
-  updateVaultLastBackup(vaultId);
-
-  saveDb();
+  await updateVaultLastBackup(vaultId);
 
   // Return the created backup
-  return getBackupById(id)!;
+  return (await getBackupById(id))!;
 }
 
-export function getBackupById(id: string): BackupRecord | undefined {
+export async function getBackupById(
+  id: string,
+): Promise<BackupRecord | undefined> {
   const db = getDb();
-  const stmt = db.prepare('SELECT * FROM backups WHERE id = ?');
-  stmt.bind([id]);
-  if (stmt.step()) {
-    const row = stmt.getAsObject({ blob: true }) as BackupRecord;
-    stmt.free();
-    return row;
+  const result = await db.query(
+    "SELECT id, vault_id, blob, size_bytes, created_at, device_id FROM backups WHERE id = $1",
+    [id],
+  );
+  if (result.rows.length > 0) {
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      vault_id: row.vault_id,
+      blob: row.blob,
+      size_bytes: row.size_bytes,
+      created_at: row.created_at,
+      device_id: row.device_id,
+    };
   }
-  stmt.free();
   return undefined;
 }
 
-export function getLatestBackup(vaultId: string): BackupRecord | undefined {
+export async function getLatestBackup(
+  vaultId: string,
+): Promise<BackupRecord | undefined> {
   const db = getDb();
-  const stmt = db.prepare(`
-    SELECT * FROM backups
-    WHERE vault_id = ?
+  const result = await db.query(
+    `
+    SELECT id, vault_id, blob, size_bytes, created_at, device_id FROM backups
+    WHERE vault_id = $1
     ORDER BY created_at DESC
     LIMIT 1
-  `);
-  stmt.bind([vaultId]);
-  if (stmt.step()) {
-    const row = stmt.getAsObject({ blob: true }) as BackupRecord;
-    stmt.free();
-    return row;
+  `,
+    [vaultId],
+  );
+  if (result.rows.length > 0) {
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      vault_id: row.vault_id,
+      blob: row.blob,
+      size_bytes: row.size_bytes,
+      created_at: row.created_at,
+      device_id: row.device_id,
+    };
   }
-  stmt.free();
   return undefined;
 }
 
@@ -145,35 +188,180 @@ export interface BackupMetadata {
   device_id: string | null;
 }
 
-export function listBackups(
+export async function listBackups(
   vaultId: string,
   limit = 10,
-  offset = 0
-): { backups: BackupMetadata[]; total: number } {
+  offset = 0,
+): Promise<{ backups: BackupMetadata[]; total: number }> {
   const db = getDb();
 
   // Get total count
-  const countStmt = db.prepare('SELECT COUNT(*) as count FROM backups WHERE vault_id = ?');
-  countStmt.bind([vaultId]);
-  countStmt.step();
-  const { count } = countStmt.getAsObject() as { count: number };
-  countStmt.free();
+  const countResult = await db.query(
+    "SELECT COUNT(*) as count FROM backups WHERE vault_id = $1",
+    [vaultId],
+  );
+  const total = parseInt(countResult.rows[0].count, 10);
 
   // Get backups
-  const stmt = db.prepare(`
+  const result = await db.query(
+    `
     SELECT id, created_at, size_bytes, device_id
     FROM backups
-    WHERE vault_id = ?
+    WHERE vault_id = $1
     ORDER BY created_at DESC
-    LIMIT ? OFFSET ?
-  `);
-  stmt.bind([vaultId, limit, offset]);
+    LIMIT $2 OFFSET $3
+  `,
+    [vaultId, limit, offset],
+  );
 
-  const backups: BackupMetadata[] = [];
-  while (stmt.step()) {
-    backups.push(stmt.getAsObject() as BackupMetadata);
+  return { backups: result.rows as BackupMetadata[], total };
+}
+
+// Event types for analytics
+export type EventType =
+  | "backup.created"
+  | "backup.downloaded"
+  | "vault.created"
+  | "api.request";
+
+export interface EventRecord {
+  id: number;
+  event_type: EventType;
+  vault_id: string | null;
+  backup_id: string | null;
+  metadata: Record<string, unknown> | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export async function logEvent(
+  eventType: EventType,
+  options: {
+    vaultId?: string;
+    backupId?: string;
+    metadata?: Record<string, unknown>;
+    ipAddress?: string;
+    userAgent?: string;
+  } = {},
+): Promise<void> {
+  const db = getDb();
+  await db.query(
+    `INSERT INTO events (event_type, vault_id, backup_id, metadata, ip_address, user_agent, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+    [
+      eventType,
+      options.vaultId || null,
+      options.backupId || null,
+      options.metadata ? JSON.stringify(options.metadata) : null,
+      options.ipAddress || null,
+      options.userAgent || null,
+    ],
+  );
+}
+
+export interface AnalyticsSummary {
+  totalVaults: number;
+  totalBackups: number;
+  totalEvents: number;
+  totalStorageBytes: number;
+  eventsToday: number;
+  backupsToday: number;
+}
+
+export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
+  const db = getDb();
+
+  const [vaults, backups, events, storage, eventsToday, backupsToday] =
+    await Promise.all([
+      db.query("SELECT COUNT(*) as count FROM vaults"),
+      db.query("SELECT COUNT(*) as count FROM backups"),
+      db.query("SELECT COUNT(*) as count FROM events"),
+      db.query("SELECT COALESCE(SUM(size_bytes), 0) as total FROM backups"),
+      db.query(
+        "SELECT COUNT(*) as count FROM events WHERE created_at >= CURRENT_DATE",
+      ),
+      db.query(
+        "SELECT COUNT(*) as count FROM backups WHERE created_at >= CURRENT_DATE",
+      ),
+    ]);
+
+  return {
+    totalVaults: parseInt(vaults.rows[0].count, 10),
+    totalBackups: parseInt(backups.rows[0].count, 10),
+    totalEvents: parseInt(events.rows[0].count, 10),
+    totalStorageBytes: parseInt(storage.rows[0].total, 10),
+    eventsToday: parseInt(eventsToday.rows[0].count, 10),
+    backupsToday: parseInt(backupsToday.rows[0].count, 10),
+  };
+}
+
+export interface EventsQuery {
+  eventType?: EventType;
+  vaultId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function getEvents(
+  query: EventsQuery = {},
+): Promise<{ events: EventRecord[]; total: number }> {
+  const db = getDb();
+  const { eventType, vaultId, limit = 50, offset = 0 } = query;
+
+  let whereClause = "";
+  const params: (string | number)[] = [];
+  let paramIndex = 1;
+
+  if (eventType) {
+    whereClause += ` WHERE event_type = $${paramIndex++}`;
+    params.push(eventType);
   }
-  stmt.free();
 
-  return { backups, total: count };
+  if (vaultId) {
+    whereClause += whereClause ? " AND" : " WHERE";
+    whereClause += ` vault_id = $${paramIndex++}`;
+    params.push(vaultId);
+  }
+
+  // Get total count
+  const countResult = await db.query(
+    `SELECT COUNT(*) as count FROM events${whereClause}`,
+    params,
+  );
+  const total = parseInt(countResult.rows[0].count, 10);
+
+  // Get events
+  const result = await db.query(
+    `SELECT id, event_type, vault_id, backup_id, metadata, ip_address, user_agent, created_at
+     FROM events${whereClause}
+     ORDER BY created_at DESC
+     LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+    [...params, limit, offset],
+  );
+
+  return { events: result.rows as EventRecord[], total };
+}
+
+export interface EventCountByType {
+  event_type: string;
+  count: number;
+}
+
+export async function getEventCountsByType(
+  days = 7,
+): Promise<EventCountByType[]> {
+  const db = getDb();
+  const result = await db.query(
+    `SELECT event_type, COUNT(*) as count
+     FROM events
+     WHERE created_at >= NOW() - INTERVAL '1 day' * $1
+     GROUP BY event_type
+     ORDER BY count DESC`,
+    [days],
+  );
+  return result.rows.map((row) => ({
+    event_type: row.event_type,
+    count: parseInt(row.count, 10),
+  }));
 }
