@@ -1,46 +1,42 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
-import { pathExists, isDirectory, readFileContent } from '../utils/fs.js';
-import { generateFingerprint, getProjectName, getGitRemoteUrl } from './fingerprint.js';
-import { sha256 } from './crypto.js';
+import * as fs from "fs/promises";
+import * as path from "path";
+import { v4 as uuidv4 } from "uuid";
+import { pathExists, isDirectory, readFileContent } from "../utils/fs.js";
+import {
+  generateFingerprint,
+  getProjectName,
+  getGitRemoteUrl,
+} from "./fingerprint.js";
+import { sha256 } from "./crypto.js";
 
 // Project marker files
 const PROJECT_MARKERS = [
-  '.git',
-  'package.json',
-  'pyproject.toml',
-  'go.mod',
-  'Cargo.toml',
-  'composer.json',
+  ".git",
+  "package.json",
+  "pyproject.toml",
+  "go.mod",
+  "Cargo.toml",
+  "composer.json",
 ];
 
 // Directories to skip during scanning
 const SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'vendor',
-  'dist',
-  'build',
-  '.next',
-  '.nuxt',
-  '__pycache__',
-  '.venv',
-  'venv',
-  'target',
-  '.cargo',
+  "node_modules",
+  ".git",
+  "vendor",
+  "dist",
+  "build",
+  ".next",
+  ".nuxt",
+  "__pycache__",
+  ".venv",
+  "venv",
+  "target",
+  ".cargo",
 ]);
 
-// Environment file patterns
-const ENV_PATTERNS = [
-  /^\.env$/,
-  /^\.env\.local$/,
-  /^\.env\.development$/,
-  /^\.env\.production$/,
-  /^\.env\.test$/,
-  /^\.env\.staging$/,
-  /^\.env\.[^.]+\.local$/,
-];
+// Environment file patterns - matches .env and .env.*
+const ENV_PATTERNS = [/^\.env$/, /^\.env\..+$/];
 
 export interface EnvFile {
   filename: string;
@@ -54,7 +50,7 @@ export interface Project {
   path: string;
   git: string | null;
   fingerprint: string;
-  fingerprintSource: 'git' | 'package' | 'folder';
+  fingerprintSource: "git" | "package" | "folder";
   fingerprintValue: string;
   envs: EnvFile[];
 }
@@ -85,33 +81,46 @@ function isEnvFile(filename: string): boolean {
 }
 
 /**
- * Find all env files in a project directory
+ * Find all env files in a project directory recursively
  */
 async function findEnvFiles(projectPath: string): Promise<EnvFile[]> {
   const envFiles: EnvFile[] = [];
 
-  try {
-    const entries = await fs.readdir(projectPath, { withFileTypes: true });
+  async function scanDir(dirPath: string, prefix: string = ""): Promise<void> {
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
-    for (const entry of entries) {
-      if (entry.isFile() && isEnvFile(entry.name)) {
-        const filePath = path.join(projectPath, entry.name);
-        try {
-          const content = await readFileContent(filePath);
-          envFiles.push({
-            filename: entry.name,
-            checksum: sha256(content),
-            content,
-          });
-        } catch {
-          // Skip files we can't read
+      for (const entry of entries) {
+        const entryPath = path.join(dirPath, entry.name);
+
+        if (entry.isFile() && isEnvFile(entry.name)) {
+          try {
+            const content = await readFileContent(entryPath);
+            const filename = prefix ? `${prefix}/${entry.name}` : entry.name;
+            envFiles.push({
+              filename,
+              checksum: sha256(content),
+              content,
+            });
+          } catch {
+            // Skip files we can't read
+          }
+        } else if (
+          entry.isDirectory() &&
+          !SKIP_DIRS.has(entry.name) &&
+          !entry.name.startsWith(".")
+        ) {
+          // Recursively scan subdirectories
+          const newPrefix = prefix ? `${prefix}/${entry.name}` : entry.name;
+          await scanDir(entryPath, newPrefix);
         }
       }
+    } catch {
+      // Skip directories we can't read
     }
-  } catch {
-    // Skip directories we can't read
   }
 
+  await scanDir(projectPath);
   return envFiles;
 }
 
@@ -153,7 +162,11 @@ export async function scanDirectory(rootPath: string): Promise<ScanResult> {
       const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
       for (const entry of entries) {
-        if (entry.isDirectory() && !SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
+        if (
+          entry.isDirectory() &&
+          !SKIP_DIRS.has(entry.name) &&
+          !entry.name.startsWith(".")
+        ) {
           const subPath = path.join(dirPath, entry.name);
           await scan(subPath);
         }
