@@ -1,6 +1,6 @@
 {
   "name": "envii-cli",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Backup and restore .env files across machines with recovery-phrase authentication",
   "type": "module",
   "main": "dist/index.js",
