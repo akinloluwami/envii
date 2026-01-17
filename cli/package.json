@@ -1,5 +1,5 @@
 {
-  "name": "envii",
+  "name": "envii-cli",
   "version": "0.0.1",
   "description": "Backup and restore .env files across machines with recovery-phrase authentication",
   "type": "module",
