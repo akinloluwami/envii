@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="web/public/logo.png" alt="Envii Logo" width="120" />
+</p>
+
 # Envii
 
 Backup and restore `.env` files across machines using a cloud backend and recovery-phrase authentication.
