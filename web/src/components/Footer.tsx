@@ -1,4 +1,4 @@
-import { Github, Twitter } from "lucide-react";
+import { SiGithub, SiNpm } from "react-icons/si";
 
 export function Footer() {
   return (
@@ -16,29 +16,6 @@ export function Footer() {
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
-            <a
-              href="https://github.com/akinloluwami/envii"
-              className="px-4 py-2 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-            >
-              Docs
-            </a>
-            <div className="w-px h-4 bg-zinc-800" />
-            <a
-              href="https://github.com/akinloluwami/envii"
-              className="px-4 py-2 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-            >
-              GitHub
-            </a>
-            <div className="w-px h-4 bg-zinc-800" />
-            <a
-              href="https://npmjs.com/package/envii-cli"
-              className="px-4 py-2 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-            >
-              npm
-            </a>
-          </div>
-
           <div className="flex items-center gap-2">
             <a
               href="https://github.com/akinloluwami/envii"
@@ -46,15 +23,15 @@ export function Footer() {
               rel="noopener noreferrer"
               className="w-9 h-9 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-emerald-500/50 transition-colors"
             >
-              <Github className="w-4 h-4" />
+              <SiGithub className="w-4 h-4" />
             </a>
             <a
-              href="https://twitter.com/aaborisade_"
+              href="https://npmjs.com/package/envii-cli"
               target="_blank"
               rel="noopener noreferrer"
               className="w-9 h-9 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-emerald-500/50 transition-colors"
             >
-              <Twitter className="w-4 h-4" />
+              <SiNpm className="w-4 h-4" />
             </a>
           </div>
         </div>
