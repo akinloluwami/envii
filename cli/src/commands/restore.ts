@@ -12,6 +12,7 @@ import {
   deriveKey,
   decryptBackup,
   extractSaltFromBackup,
+  verifyRecoveryPhrase,
 } from "../core/crypto.js";
 import { logger } from "../utils/logger.js";
 import { pathExists, writeFileContent } from "../utils/fs.js";
@@ -60,6 +61,15 @@ export async function restoreCommand(options: RestoreOptions): Promise<void> {
   logger.info("Enter your recovery phrase to decrypt the backup:\n");
   const phrase = await inputRecoveryPhrase();
 
+  const verifySpinner = logger.spinner("Verifying recovery phrase...");
+  if (!verifyRecoveryPhrase(phrase, config.vaultId)) {
+    verifySpinner.fail("Recovery phrase verification failed");
+    logger.newline();
+    logger.error("This recovery phrase does not match the configured vault.");
+    process.exit(1);
+  }
+  verifySpinner.succeed("Recovery phrase verified");
+
   // Download latest backup first (we need to extract the salt from it)
   const downloadSpinner = logger.spinner("Downloading latest backup...");
 
@@ -82,7 +92,7 @@ export async function restoreCommand(options: RestoreOptions): Promise<void> {
     const keySpinner = logger.spinner("Deriving encryption key...");
     const salt = extractSaltFromBackup(backup.blob);
     const key = await deriveKey(phrase, salt);
-    keySpinner.succeed("Encryption key derived");
+    keySpinner.succeed("Encryption key ready");
 
     // Decrypt
     const decryptSpinner = logger.spinner("Decrypting...");
