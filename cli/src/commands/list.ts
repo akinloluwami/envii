@@ -1,7 +1,11 @@
 import chalk from 'chalk';
 import { loadConfig } from '../core/config.js';
 import { createApiClient } from '../core/api.js';
-import { deriveKey, decryptBackup } from '../core/crypto.js';
+import {
+  deriveKey,
+  decryptBackup,
+  verifyRecoveryPhrase,
+} from '../core/crypto.js';
 import { logger } from '../utils/logger.js';
 import { inputRecoveryPhrase } from '../utils/prompts.js';
 
@@ -41,10 +45,19 @@ export async function listCommand(options: ListOptions): Promise<void> {
   logger.info('Enter your recovery phrase to view the backup:\n');
   const phrase = await inputRecoveryPhrase();
 
+  const verifySpinner = logger.spinner('Verifying recovery phrase...');
+  if (!verifyRecoveryPhrase(phrase, config.vaultId)) {
+    verifySpinner.fail('Recovery phrase verification failed');
+    logger.newline();
+    logger.error('This recovery phrase does not match the configured vault.');
+    process.exit(1);
+  }
+  verifySpinner.succeed('Recovery phrase verified');
+
   // Derive encryption key
   const spinner = logger.spinner('Deriving encryption key...');
   const key = await deriveKey(phrase, config.salt);
-  spinner.succeed('Encryption key derived');
+  spinner.succeed('Encryption key ready');
 
   // Download latest backup
   const downloadSpinner = logger.spinner('Downloading latest backup...');
