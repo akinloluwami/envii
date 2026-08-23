@@ -70,6 +70,27 @@ export function generateVaultId(phrase: string): string {
 }
 
 /**
+ * Verify that a recovery phrase is valid and belongs to the configured vault.
+ */
+export function verifyRecoveryPhrase(
+  phrase: string,
+  vaultId: string,
+): boolean {
+  if (!validateRecoveryPhrase(phrase)) {
+    return false;
+  }
+
+  const derivedVaultId = generateVaultId(phrase);
+  const derivedBuffer = Buffer.from(derivedVaultId, "hex");
+  const configuredBuffer = Buffer.from(vaultId, "hex");
+
+  return (
+    derivedBuffer.length === configuredBuffer.length &&
+    crypto.timingSafeEqual(derivedBuffer, configuredBuffer)
+  );
+}
+
+/**
  * Generate SHA-256 checksum of content
  */
 export function sha256(content: string): string {
