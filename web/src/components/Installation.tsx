@@ -1,12 +1,12 @@
 import { useState } from "react";
 
 export function Installation() {
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText("npm install -g envii-cli");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   return (
@@ -36,10 +36,10 @@ export function Installation() {
             <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800">
               <span className="text-sm text-zinc-500 font-mono">npm</span>
               <button
-                onClick={handleCopy}
-                className="text-xs text-zinc-500 hover:text-white transition-colors px-2 py-1 border border-zinc-700 hover:border-zinc-500"
+                onClick={() => handleCopy("npm install -g envii-cli", "npm")}
+                className="text-xs text-zinc-500 cursor-pointer hover:text-white transition-colors px-2 py-1 border border-zinc-700 hover:border-zinc-500"
               >
-                {copied ? "Copied!" : "Copy"}
+                {copiedId === "npm" ? "Copied!" : "Copy"}
               </button>
             </div>
             <div className="p-4 font-mono text-lg">
@@ -50,18 +50,39 @@ export function Installation() {
           </div>
         </div>
 
-        <div className="mt-6 grid md:grid-cols-2 gap-px bg-zinc-800">
-          <div className="bg-zinc-950 p-4">
-            <div className="text-xs text-zinc-600 mb-2 font-mono">pnpm</div>
-            <code className="text-zinc-300 font-mono text-sm">
-              pnpm add -g envii-cli
-            </code>
+        <div className="mt-6 grid md:grid-cols-2 gap-4">
+          <div className="border border-zinc-800 bg-zinc-950">
+            <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800">
+              <span className="text-sm text-zinc-500 font-mono">pnpm</span>
+              <button
+                onClick={() => handleCopy("pnpm add -g envii-cli", "pnpm")}
+                className="text-xs text-zinc-500 cursor-pointer hover:text-white transition-colors px-2 py-1 border border-zinc-700 hover:border-zinc-500"
+              >
+                {copiedId === "pnpm" ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <div className="p-4 font-mono text-sm">
+              <span className="text-zinc-500">$</span>{" "}
+              <span className="text-emerald-400">pnpm</span>{" "}
+              <span className="text-zinc-100">add -g envii-cli</span>
+            </div>
           </div>
-          <div className="bg-zinc-950 p-4">
-            <div className="text-xs text-zinc-600 mb-2 font-mono">yarn</div>
-            <code className="text-zinc-300 font-mono text-sm">
-              yarn global add envii-cli
-            </code>
+
+          <div className="border border-zinc-800 bg-zinc-950">
+            <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800">
+              <span className="text-sm text-zinc-500 font-mono">yarn</span>
+              <button
+                onClick={() => handleCopy("yarn global add envii-cli", "yarn")}
+                className="text-xs text-zinc-500 cursor-pointer hover:text-white transition-colors px-2 py-1 border border-zinc-700 hover:border-zinc-500"
+              >
+                {copiedId === "yarn" ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <div className="p-4 font-mono text-sm">
+              <span className="text-zinc-500">$</span>{" "}
+              <span className="text-emerald-400">yarn</span>{" "}
+              <span className="text-zinc-100">global add envii-cli</span>
+            </div>
           </div>
         </div>
 
